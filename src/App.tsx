@@ -240,20 +240,20 @@ export default function App() {
                 key={occ.id}
                 onClick={() => setSelectedOccupationId(occ.id)}
                 className={cn(
-                  "w-full text-left p-3 border transition-colors flex flex-col",
+                  "w-full text-left p-3 border-y border-r border-l-2 transition-all flex flex-col group",
                   selectedOccupationId === occ.id 
-                    ? "bg-[#14161b] border-red-900/50"
-                    : "bg-[#0c0d10] border-[#1f2228] opacity-60 hover:bg-[#14161b] hover:opacity-100"
+                    ? "bg-[#14161b] border-y-red-900/50 border-r-red-900/50 border-l-red-500 shadow-sm"
+                    : "bg-[#0c0d10] border-[#1f2228] hover:bg-[#14161b] hover:border-[#31363f] hover:border-l-[#5e636e]"
                 )}
               >
             <div className="flex justify-between items-center w-full mb-1">
-              <span className={cn("text-sm", selectedOccupationId === occ.id ? "text-white font-semibold" : "")}>{occ.name}</span>
-              <span className={cn("font-mono text-sm", occ.points > 0 ? "text-green-500" : occ.points < 0 ? "text-red-500" : "text-[#5e636e]")}>
+              <span className={cn("text-sm transition-colors", selectedOccupationId === occ.id ? "text-white font-semibold" : "text-[#a0a5b0] group-hover:text-stone-300")}>{occ.name}</span>
+              <span className={cn("font-mono text-sm transition-colors", occ.points > 0 ? "text-green-500" : occ.points < 0 ? "text-red-500" : "text-[#5e636e]")}>
                 {occ.points > 0 ? `+${occ.points}` : occ.points}
               </span>
             </div>
             {occ.description && (
-              <p className="text-[10px] text-[#5e636e] italic mb-1">{occ.description}</p>
+              <p className={cn("text-[10px] italic mb-1 transition-colors", selectedOccupationId === occ.id ? "text-[#808796]" : "text-[#5e636e] group-hover:text-[#808796]")}>{occ.description}</p>
             )}
             {(occ.modifiers && Object.keys(occ.modifiers).length > 0) || (occ.freeTraits && occ.freeTraits.length > 0) ? (
               <div className="flex flex-wrap gap-1.5 mt-auto pt-1">
@@ -410,20 +410,22 @@ function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait,
     <div
       onClick={!isExcluded ? onClick : undefined}
       className={cn(
-        "p-2 border flex justify-between items-start transition-colors cursor-pointer group",
+        "p-2 border-y border-r border-l-2 flex justify-between items-start transition-all cursor-pointer group",
         isSelected 
-          ? (trait.type === 'positive' ? "bg-green-900/10 border-green-900/40" : "bg-red-900/10 border-red-900/40")
+          ? (trait.type === 'positive' 
+              ? "bg-green-950/30 border-y-green-900/50 border-r-green-900/50 border-l-green-500 shadow-[inset_0_0_12px_rgba(20,83,45,0.1)]" 
+              : "bg-red-950/30 border-y-red-900/50 border-r-red-900/50 border-l-red-500 shadow-[inset_0_0_12px_rgba(127,29,29,0.1)]")
           : isExcluded 
-            ? "bg-[#14161b] border-[#1f2228] opacity-20 cursor-not-allowed" 
-            : "bg-[#14161b] border-[#1f2228] opacity-40 hover:bg-[#1f2228] hover:opacity-100"
+            ? "bg-[#0c0d10] border-[#1f2228] opacity-30 cursor-not-allowed" 
+            : "bg-[#0c0d10] border-[#1f2228] hover:bg-[#14161b] hover:border-[#31363f] hover:border-l-[#5e636e]"
       )}
     >
-      <div className="flex flex-col pr-3">
+      <div className="flex flex-col pr-3 flex-1">
         <div className="flex items-center gap-2">
           <span className={cn(
             "text-xs transition-colors", 
-            isSelected ? "text-white font-medium" : "text-[#a0a5b0]", 
-            isExcluded && "line-through"
+            isSelected ? "text-white font-semibold" : "text-[#a0a5b0] group-hover:text-stone-300", 
+            isExcluded && "line-through text-[#5e636e]"
           )}>
             {trait.name}
           </span>
@@ -432,8 +434,8 @@ function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait,
         <div className="flex flex-col mt-1 space-y-1">
           {(trait.description || trait.effects) && (
             <span className={cn(
-              "text-[9px] leading-tight",
-              isSelected ? "text-[#808796]" : "text-[#5e636e] group-hover:text-[#a0a5b0]"
+              "text-[9px] leading-tight transition-colors",
+              isSelected ? "text-[#808796]" : "text-[#5e636e] group-hover:text-[#808796]"
             )}>
               {trait.description} {trait.effects}
             </span>
