@@ -150,15 +150,24 @@ export default function App() {
             {occ.description && (
               <p className="text-[10px] text-[#5e636e] italic mb-1">{occ.description}</p>
             )}
-            {occ.modifiers && Object.keys(occ.modifiers).length > 0 && (
+            {(occ.modifiers && Object.keys(occ.modifiers).length > 0) || (occ.freeTraits && occ.freeTraits.length > 0) ? (
               <div className="flex flex-wrap gap-1.5 mt-auto pt-1">
-                {Object.entries(occ.modifiers).map(([k, v]) => (
+                {occ.modifiers && Object.entries(occ.modifiers).map(([k, v]) => (
                   <span key={k} className="text-[9px] font-mono text-amber-500/80 bg-amber-900/10 px-1 py-0.5 rounded border border-amber-900/30">
                     {v > 0 ? '+' : ''}{v} {k}
                   </span>
                 ))}
+                {occ.freeTraits && occ.freeTraits.map(tId => {
+                  const trait = traits.find(t => t.id === tId);
+                  if (!trait) return null;
+                  return (
+                    <span key={tId} className="text-[9px] font-mono text-blue-400/80 bg-blue-900/10 px-1 py-0.5 rounded border border-blue-900/30">
+                      {trait.name}
+                    </span>
+                  );
+                })}
               </div>
-            )}
+            ) : null}
               </button>
             ))}
           </div>
