@@ -141,15 +141,24 @@ export default function App() {
                     : "bg-[#0c0d10] border-[#1f2228] opacity-60 hover:bg-[#14161b] hover:opacity-100"
                 )}
               >
-                <div className="flex justify-between items-center w-full mb-1">
-                  <span className={cn("text-sm", selectedOccupationId === occ.id ? "text-white font-semibold" : "")}>{occ.name}</span>
-                  <span className={cn("font-mono text-sm", occ.points > 0 ? "text-green-500" : occ.points < 0 ? "text-red-500" : "text-[#5e636e]")}>
-                    {occ.points > 0 ? `+${occ.points}` : occ.points}
+            <div className="flex justify-between items-center w-full mb-1">
+              <span className={cn("text-sm", selectedOccupationId === occ.id ? "text-white font-semibold" : "")}>{occ.name}</span>
+              <span className={cn("font-mono text-sm", occ.points > 0 ? "text-green-500" : occ.points < 0 ? "text-red-500" : "text-[#5e636e]")}>
+                {occ.points > 0 ? `+${occ.points}` : occ.points}
+              </span>
+            </div>
+            {occ.description && (
+              <p className="text-[10px] text-[#5e636e] italic mb-1">{occ.description}</p>
+            )}
+            {occ.modifiers && Object.keys(occ.modifiers).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-auto pt-1">
+                {Object.entries(occ.modifiers).map(([k, v]) => (
+                  <span key={k} className="text-[9px] font-mono text-amber-500/80 bg-amber-900/10 px-1 py-0.5 rounded border border-amber-900/30">
+                    {v > 0 ? '+' : ''}{v} {k}
                   </span>
-                </div>
-                {occ.description && (
-                  <p className="text-[10px] text-[#5e636e] italic line-clamp-2">{occ.description}</p>
-                )}
+                ))}
+              </div>
+            )}
               </button>
             ))}
           </div>
@@ -244,14 +253,21 @@ export default function App() {
             <h2 className="text-[10px] uppercase tracking-widest text-red-400 mb-2">Build Summary</h2>
             <div className="text-[11px] leading-relaxed text-[#808796] overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-red-900/30">
                <p><span className="text-white uppercase tracking-wider text-[10px]">Occupation:</span> {selectedOccupation.name}</p>
-               {currentTraits.sort((a,b) => a.type.localeCompare(b.type)).map(t => (
-                  <p key={t.id}>
-                    <span className={cn(
-                      "font-semibold", 
-                      t.type === 'positive' || t.type === 'occupation' ? "text-white" : "text-red-400"
-                    )}>{t.name}:</span> {t.description}
-                  </p>
-               ))}
+           {currentTraits.sort((a,b) => a.type.localeCompare(b.type)).map(t => {
+              const modifierText = t.modifiers ? Object.entries(t.modifiers).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
+              return (
+                <div key={t.id} className="flex flex-col mb-2">
+                  <span className={cn(
+                    "font-semibold", 
+                    t.type === 'positive' || t.type === 'occupation' ? "text-white" : "text-red-400"
+                  )}>
+                    {t.name}
+                    {modifierText && <span className="text-amber-500 font-mono text-[9px] ml-2">[{modifierText}]</span>}
+                  </span>
+                  <span className="text-[10px]">{t.description} {t.effects}</span>
+                </div>
+              );
+           })}
             </div>
           </div>
         </section>
@@ -270,11 +286,13 @@ export default function App() {
 }
 
 function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait, isSelected: boolean, isExcluded: boolean, onClick: () => void }) {
+  const modifierText = trait.modifiers ? Object.entries(trait.modifiers).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
+
   return (
     <div
       onClick={!isExcluded ? onClick : undefined}
       className={cn(
-        "p-2 border flex justify-between items-center transition-colors cursor-pointer",
+        "p-2 border flex justify-between items-start transition-colors cursor-pointer group",
         isSelected 
           ? (trait.type === 'positive' ? "bg-green-900/10 border-green-900/40" : "bg-red-900/10 border-red-900/40")
           : isExcluded 
@@ -282,16 +300,34 @@ function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait,
             : "bg-[#14161b] border-[#1f2228] opacity-40 hover:bg-[#1f2228] hover:opacity-100"
       )}
     >
-      <div className="flex flex-col">
-        <span className={cn(
-          "text-xs transition-colors", 
-          isSelected ? "text-white" : "text-[#a0a5b0]", 
-          isExcluded && "line-through"
-        )}>
-          {trait.name}
-        </span>
+      <div className="flex flex-col pr-3">
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            "text-xs transition-colors", 
+            isSelected ? "text-white font-medium" : "text-[#a0a5b0]", 
+            isExcluded && "line-through"
+          )}>
+            {trait.name}
+          </span>
+        </div>
+        
+        <div className="flex flex-col mt-1 space-y-1">
+          {(trait.description || trait.effects) && (
+            <span className={cn(
+              "text-[9px] leading-tight",
+              isSelected ? "text-[#808796]" : "text-[#5e636e] group-hover:text-[#a0a5b0]"
+            )}>
+              {trait.description} {trait.effects}
+            </span>
+          )}
+          {modifierText && (
+            <span className="text-[9px] font-mono text-amber-500/80">
+              {modifierText}
+            </span>
+          )}
+        </div>
       </div>
-      <span className={cn("font-mono text-[10px]", 
+      <span className={cn("font-mono text-[10px] shrink-0", 
         trait.cost < 0 ? "text-green-500" : "text-red-500"
       )}>
         {trait.cost > 0 ? `+${trait.cost}` : trait.cost}
