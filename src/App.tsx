@@ -1,12 +1,81 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Minus, Plus, Settings2, ShieldQuestion, ShieldAlert, BadgeCheck, Check, Skull } from 'lucide-react';
+import { Minus, Plus, Settings2, ShieldQuestion, ShieldAlert, BadgeCheck, Check, Skull, Edit2, Trash2, Copy, FilePlus } from 'lucide-react';
 import { traits, occupations, createBaseSkills, getExclusions, Skill, Trait, Occupation } from './data';
 import { cn } from './lib/utils';
 
+interface Loadout {
+  id: string;
+  name: string;
+  starterPoints: number;
+  occupationId: string;
+  traitIds: string[];
+}
+
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
 export default function App() {
-  const [starterPoints, setStarterPoints] = useState(0);
-  const [selectedOccupationId, setSelectedOccupationId] = useState('custom');
-  const [selectedTraitIds, setSelectedTraitIds] = useState<string[]>([]);
+  const [loadouts, setLoadouts] = useState<Loadout[]>(() => {
+    try {
+      const saved = localStorage.getItem('pz-loadouts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [{ id: generateId(), name: 'Build 1', starterPoints: 0, occupationId: 'custom', traitIds: [] }];
+  });
+
+  const [activeLoadoutId, setActiveLoadoutId] = useState<string>(loadouts[0]?.id);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
+  
+  const activeLoadout = loadouts.find(l => l.id === activeLoadoutId) || loadouts[0];
+  
+  useEffect(() => {
+    localStorage.setItem('pz-loadouts', JSON.stringify(loadouts));
+  }, [loadouts]);
+
+  const updateActiveLoadout = (updates: Partial<Loadout>) => {
+    setLoadouts(prev => prev.map(l => l.id === activeLoadout.id ? { ...l, ...updates } : l));
+  };
+
+  const starterPoints = activeLoadout.starterPoints;
+  const setStarterPoints = (val: number | ((prev: number) => number)) => {
+    const newVal = typeof val === 'function' ? val(starterPoints) : val;
+    updateActiveLoadout({ starterPoints: newVal });
+  };
+  const selectedOccupationId = activeLoadout.occupationId;
+  const setSelectedOccupationId = (id: string) => updateActiveLoadout({ occupationId: id });
+  const selectedTraitIds = activeLoadout.traitIds;
+  
+  const startEditingName = () => {
+    setTempName(activeLoadout.name);
+    setIsEditingName(true);
+  };
+
+  const saveName = () => {
+    if (tempName.trim()) updateActiveLoadout({ name: tempName.trim() });
+    setIsEditingName(false);
+  };
+
+  const createLoadout = () => {
+    const id = generateId();
+    setLoadouts(prev => [...prev, { id, name: `Build ${prev.length + 1}`, starterPoints: 0, occupationId: 'custom', traitIds: [] }]);
+    setActiveLoadoutId(id);
+  };
+
+  const duplicateLoadout = () => {
+    const id = generateId();
+    setLoadouts(prev => [...prev, { ...activeLoadout, id, name: `${activeLoadout.name} (Copy)` }]);
+    setActiveLoadoutId(id);
+  };
+
+  const deleteLoadout = () => {
+    if (loadouts.length <= 1) return;
+    const newLoadouts = loadouts.filter(l => l.id !== activeLoadout.id);
+    setLoadouts(newLoadouts);
+    setActiveLoadoutId(newLoadouts[0].id);
+  };
 
   const selectedOccupation = useMemo(() => 
     occupations.find(o => o.id === selectedOccupationId) || occupations[0]
@@ -14,16 +83,16 @@ export default function App() {
 
   // Handle trait toggling
   const toggleTrait = (traitId: string) => {
-    setSelectedTraitIds(prev => {
-      if (prev.includes(traitId)) {
-        return prev.filter(id => id !== traitId);
-      }
-      
-      const newTraits = [...prev, traitId];
-      // Remove any mutually exclusive traits
-      const exclusions = getExclusions(traitId);
-      return newTraits.filter(id => !exclusions.includes(id));
-    });
+    const prev = selectedTraitIds;
+    if (prev.includes(traitId)) {
+      updateActiveLoadout({ traitIds: prev.filter(id => id !== traitId) });
+      return;
+    }
+    
+    const newTraits = [...prev, traitId];
+    // Remove any mutually exclusive traits
+    const exclusions = getExclusions(traitId);
+    updateActiveLoadout({ traitIds: newTraits.filter(id => !exclusions.includes(id)) });
   };
 
   // Compute final state
@@ -34,7 +103,7 @@ export default function App() {
     // Add occupation modifiers
     if (selectedOccupation.modifiers) {
       Object.entries(selectedOccupation.modifiers).forEach(([skill, val]) => {
-        base[skill as Skill] += val;
+        base[skill as Skill] += val as number;
       });
     }
 
@@ -48,7 +117,7 @@ export default function App() {
           currentTraitsList.push(freeTrait);
           if (freeTrait.modifiers) {
             Object.entries(freeTrait.modifiers).forEach(([skill, val]) => {
-              base[skill as Skill] += val;
+              base[skill as Skill] += val as number;
             });
           }
         }
@@ -63,7 +132,7 @@ export default function App() {
         points += trait.cost; // cost is negative for positive, positive for negative
         if (trait.modifiers) {
           Object.entries(trait.modifiers).forEach(([skill, val]) => {
-            base[skill as Skill] += val;
+            base[skill as Skill] += val as number;
           });
         }
       }
@@ -95,6 +164,42 @@ export default function App() {
           <div className="flex flex-col">
             <h1 className="text-lg font-semibold tracking-wider uppercase text-white leading-tight">Project Zomboid</h1>
             <p className="text-[10px] text-[#5e636e] uppercase tracking-widest font-mono">Character Architect</p>
+          </div>
+          
+          <div className="h-8 w-px bg-[#1f2228] mx-2 hidden sm:block"></div>
+          
+          <div className="flex items-center gap-2">
+            {isEditingName ? (
+              <input 
+                value={tempName} 
+                onChange={e => setTempName(e.target.value)} 
+                onBlur={saveName}
+                onKeyDown={e => e.key === 'Enter' && saveName()}
+                autoFocus 
+                className="bg-[#0c0d10] text-sm text-white border border-[#31363f] rounded px-2 py-1 w-40 focus:outline-none focus:border-red-600"
+              />
+            ) : (
+              <div className="flex items-center gap-2 group relative">
+                <select 
+                  value={activeLoadout.id}
+                  onChange={(e) => setActiveLoadoutId(e.target.value)}
+                  className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer appearance-none pr-4 hover:text-red-400 transition-colors"
+                >
+                  {loadouts.map(l => (
+                    <option key={l.id} value={l.id} className="bg-[#14161b]">{l.name}</option>
+                  ))}
+                </select>
+                <button onClick={startEditingName} className="opacity-0 group-hover:opacity-100 text-[#5e636e] hover:text-white transition-opacity"><Edit2 className="w-3 h-3" /></button>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-1 ml-2">
+              <button onClick={createLoadout} className="p-1.5 text-[#5e636e] hover:text-white hover:bg-[#1f2228] rounded transition-colors" title="New Build"><FilePlus className="w-4 h-4" /></button>
+              <button onClick={duplicateLoadout} className="p-1.5 text-[#5e636e] hover:text-white hover:bg-[#1f2228] rounded transition-colors" title="Duplicate Build"><Copy className="w-4 h-4" /></button>
+              {loadouts.length > 1 && (
+                <button onClick={deleteLoadout} className="p-1.5 text-[#5e636e] hover:text-red-500 hover:bg-red-950/30 rounded transition-colors" title="Delete Build"><Trash2 className="w-4 h-4" /></button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -234,7 +339,8 @@ export default function App() {
               <ShieldQuestion className="w-3 h-3" /> Skills & Boosts
             </h2>
             <div className="space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#1f2228]">
-              {Object.entries(finalSkills).filter(([skill, val]) => val > 0 || skill === 'Fitness' || skill === 'Strength').sort((a,b) => b[1] - a[1]).map(([skill, val]) => {
+              {Object.entries(finalSkills).filter(([skill, val]) => (val as number) > 0 || skill === 'Fitness' || skill === 'Strength').sort((a,b) => (b[1] as number) - (a[1] as number)).map(([skill, valStr]) => {
+                const val = valStr as number;
                 let xpBoost = "";
                 if (skill !== 'Fitness' && skill !== 'Strength') {
                   if (val === 1) xpBoost = "(100%)";
@@ -263,7 +369,7 @@ export default function App() {
             <div className="text-[11px] leading-relaxed text-[#808796] overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-red-900/30">
                <p><span className="text-white uppercase tracking-wider text-[10px]">Occupation:</span> {selectedOccupation.name}</p>
            {currentTraits.sort((a,b) => a.type.localeCompare(b.type)).map(t => {
-              const modifierText = t.modifiers ? Object.entries(t.modifiers).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
+              const modifierText = t.modifiers ? Object.entries(t.modifiers).map(([k, v]) => `${(v as number) > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
               return (
                 <div key={t.id} className="flex flex-col mb-2">
                   <span className={cn(
@@ -289,13 +395,16 @@ export default function App() {
           <span>|</span>
           <span>Knox Event Protocol v3.0</span>
         </div>
+        <div className="flex items-center gap-4 text-[10px] text-[#424855]">
+          <span>Character Presets: {loadouts.length} Saved</span>
+        </div>
       </footer>
     </div>
   );
 }
 
 function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait, isSelected: boolean, isExcluded: boolean, onClick: () => void }) {
-  const modifierText = trait.modifiers ? Object.entries(trait.modifiers).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
+  const modifierText = trait.modifiers ? Object.entries(trait.modifiers).map(([k, v]) => `${(v as number) > 0 ? '+' : ''}${v} ${k}`).join(', ') : '';
 
   return (
     <div
