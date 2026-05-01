@@ -1,0 +1,301 @@
+import { useState, useMemo, useEffect } from 'react';
+import { Minus, Plus, Settings2, ShieldQuestion, ShieldAlert, BadgeCheck, Check, Skull } from 'lucide-react';
+import { traits, occupations, createBaseSkills, getExclusions, Skill, Trait, Occupation } from './data';
+import { cn } from './lib/utils';
+
+export default function App() {
+  const [starterPoints, setStarterPoints] = useState(0);
+  const [selectedOccupationId, setSelectedOccupationId] = useState('custom');
+  const [selectedTraitIds, setSelectedTraitIds] = useState<string[]>([]);
+
+  const selectedOccupation = useMemo(() => 
+    occupations.find(o => o.id === selectedOccupationId) || occupations[0]
+  , [selectedOccupationId]);
+
+  // Handle trait toggling
+  const toggleTrait = (traitId: string) => {
+    setSelectedTraitIds(prev => {
+      if (prev.includes(traitId)) {
+        return prev.filter(id => id !== traitId);
+      }
+      
+      const newTraits = [...prev, traitId];
+      // Remove any mutually exclusive traits
+      const exclusions = getExclusions(traitId);
+      return newTraits.filter(id => !exclusions.includes(id));
+    });
+  };
+
+  // Compute final state
+  const { availablePoints, finalSkills, currentTraits } = useMemo(() => {
+    let points = starterPoints + selectedOccupation.points;
+    let base = createBaseSkills();
+    
+    // Add occupation modifiers
+    if (selectedOccupation.modifiers) {
+      Object.entries(selectedOccupation.modifiers).forEach(([skill, val]) => {
+        base[skill as Skill] += val;
+      });
+    }
+
+    const currentTraitsList: Trait[] = [];
+
+    // Add free traits from occupation
+    if (selectedOccupation.freeTraits) {
+      selectedOccupation.freeTraits.forEach(freeTraitId => {
+        const freeTrait = traits.find(t => t.id === freeTraitId);
+        if (freeTrait) {
+          currentTraitsList.push(freeTrait);
+          if (freeTrait.modifiers) {
+            Object.entries(freeTrait.modifiers).forEach(([skill, val]) => {
+              base[skill as Skill] += val;
+            });
+          }
+        }
+      });
+    }
+
+    // Add selected traits
+    selectedTraitIds.forEach(traitId => {
+      const trait = traits.find(t => t.id === traitId);
+      if (trait) {
+        currentTraitsList.push(trait);
+        points += trait.cost; // cost is negative for positive, positive for negative
+        if (trait.modifiers) {
+          Object.entries(trait.modifiers).forEach(([skill, val]) => {
+            base[skill as Skill] += val;
+          });
+        }
+      }
+    });
+
+    return { availablePoints: points, finalSkills: base, currentTraits: currentTraitsList };
+  }, [starterPoints, selectedOccupation, selectedTraitIds]);
+
+  const excludedTraitsContext = useMemo(() => {
+    const list = new Set<string>();
+    selectedTraitIds.forEach(id => {
+      getExclusions(id).forEach(ex => list.add(ex));
+    });
+    return list;
+  }, [selectedTraitIds]);
+
+  // Group traits
+  const positiveTraits = traits.filter(t => t.type === 'positive').sort((a, b) => b.cost - a.cost); // cost goes from -1 to -10, so sort by magnitude? Wait, b.cost - a.cost means -1 - (-10) = 9 -> -10 is at bottom. So let's sort by cost descending. Wait, -1 is first, -10 is last. That makes sense, cheaper traits first.
+  const negativeTraits = traits.filter(t => t.type === 'negative').sort((a, b) => a.cost - b.cost); // cost goes from 1 to 12. 1 first, 12 last.
+
+  const isPointsValid = availablePoints >= 0;
+
+  return (
+    <div className="min-h-screen bg-[#0c0d10] text-[#a0a5b0] font-sans selection:bg-red-900 selection:text-white pb-20">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#14161b] border-b border-[#1f2228] px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="w-8 h-8 bg-red-600 rounded-sm flex items-center justify-center font-bold text-white"><Skull className="w-5 h-5"/></div>
+          <div className="flex flex-col">
+            <h1 className="text-lg font-semibold tracking-wider uppercase text-white leading-tight">Project Zomboid</h1>
+            <p className="text-[10px] text-[#5e636e] uppercase tracking-widest font-mono">Character Architect</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col items-end">
+            <label className="text-[10px] uppercase tracking-widest text-[#5e636e] mb-1">Starter Points</label>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setStarterPoints(p => p - 1)} className="p-1 hover:bg-[#1f2228] rounded text-[#5e636e] hover:text-white"><Minus className="w-3 h-3" /></button>
+              <input 
+                type="number" 
+                value={starterPoints} 
+                onChange={(e) => setStarterPoints(Number(e.target.value) || 0)}
+                className="w-12 bg-transparent border-b border-[#31363f] text-center text-white focus:outline-none focus:border-red-600 font-mono py-1"
+              />
+              <button onClick={() => setStarterPoints(p => p + 1)} className="p-1 hover:bg-[#1f2228] rounded text-[#5e636e] hover:text-white"><Plus className="w-3 h-3" /></button>
+            </div>
+          </div>
+          <div className="h-10 w-px bg-[#1f2228] hidden sm:block"></div>
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] uppercase tracking-widest text-[#5e636e]">Points Remaining</span>
+            <span className={cn("text-2xl font-bold font-mono tracking-tight", isPointsValid ? "text-green-500" : "text-red-500")}>
+              {availablePoints}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-[1600px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Column: Occupation */}
+        <section className="lg:col-span-3 flex flex-col gap-2 overflow-hidden h-[calc(100vh-120px)] sticky top-[104px]">
+          <h2 className="text-[11px] uppercase tracking-widest font-bold text-[#5e636e] pb-1 border-b border-[#1f2228] flex items-center gap-2">
+            <Settings2 className="w-3 h-3" /> Occupation
+          </h2>
+          <div className="flex-grow overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-[#1f2228]">
+            {occupations.map(occ => (
+              <button
+                key={occ.id}
+                onClick={() => setSelectedOccupationId(occ.id)}
+                className={cn(
+                  "w-full text-left p-3 border transition-colors flex flex-col",
+                  selectedOccupationId === occ.id 
+                    ? "bg-[#14161b] border-red-900/50"
+                    : "bg-[#0c0d10] border-[#1f2228] opacity-60 hover:bg-[#14161b] hover:opacity-100"
+                )}
+              >
+                <div className="flex justify-between items-center w-full mb-1">
+                  <span className={cn("text-sm", selectedOccupationId === occ.id ? "text-white font-semibold" : "")}>{occ.name}</span>
+                  <span className={cn("font-mono text-sm", occ.points > 0 ? "text-green-500" : occ.points < 0 ? "text-red-500" : "text-[#5e636e]")}>
+                    {occ.points > 0 ? `+${occ.points}` : occ.points}
+                  </span>
+                </div>
+                {occ.description && (
+                  <p className="text-[10px] text-[#5e636e] italic line-clamp-2">{occ.description}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Middle Column: Traits */}
+        <section className="lg:col-span-6 flex flex-col gap-4 border-x border-[#1f2228] px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+            
+            {/* Positive Traits */}
+            <div className="flex flex-col gap-2 overflow-hidden h-[calc(100vh-120px)] sticky top-[104px]">
+              <h2 className="text-[11px] uppercase tracking-widest font-bold text-green-600 pb-1 border-b border-green-900/30 flex items-center gap-2">
+                <BadgeCheck className="w-3 h-3" /> Positive Traits
+              </h2>
+              <div className="overflow-y-auto pr-1 flex-1 scrollbar-thin scrollbar-thumb-[#1f2228] grid grid-cols-1 gap-1 content-start">
+                {positiveTraits.map(trait => {
+                  const isSelected = selectedTraitIds.includes(trait.id);
+                  const isExcluded = excludedTraitsContext.has(trait.id) && !isSelected;
+                  
+                  return (
+                    <TraitButton 
+                      key={trait.id} 
+                      trait={trait} 
+                      isSelected={isSelected} 
+                      isExcluded={isExcluded}
+                      onClick={() => toggleTrait(trait.id)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Negative Traits */}
+            <div className="flex flex-col gap-2 overflow-hidden h-[calc(100vh-120px)] sticky top-[104px]">
+              <h2 className="text-[11px] uppercase tracking-widest font-bold text-red-600 pb-1 border-b border-red-900/30 flex items-center gap-2">
+                <ShieldAlert className="w-3 h-3" /> Negative Traits
+              </h2>
+              <div className="overflow-y-auto pr-1 flex-1 scrollbar-thin scrollbar-thumb-[#1f2228] grid grid-cols-1 gap-1 content-start">
+                {negativeTraits.map(trait => {
+                  const isSelected = selectedTraitIds.includes(trait.id);
+                  const isExcluded = excludedTraitsContext.has(trait.id) && !isSelected;
+                  
+                  return (
+                    <TraitButton 
+                      key={trait.id} 
+                      trait={trait} 
+                      isSelected={isSelected} 
+                      isExcluded={isExcluded}
+                      onClick={() => toggleTrait(trait.id)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            
+          </div>
+        </section>
+
+        {/* Right Column: Character Overview */}
+        <section className="lg:col-span-3 flex flex-col gap-4 overflow-hidden bg-[#14161b]/30 p-2 h-[calc(100vh-120px)] sticky top-[104px]">
+          
+          <div className="bg-[#14161b] p-4 border border-[#1f2228] overflow-hidden flex flex-col shrink-0 max-h-[50%]">
+            <h2 className="text-[10px] uppercase tracking-widest text-[#5e636e] mb-3 flex items-center gap-2">
+              <ShieldQuestion className="w-3 h-3" /> Skills & Boosts
+            </h2>
+            <div className="space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#1f2228]">
+              {Object.entries(finalSkills).filter(([skill, val]) => val > 0 || skill === 'Fitness' || skill === 'Strength').sort((a,b) => b[1] - a[1]).map(([skill, val]) => {
+                let xpBoost = "";
+                if (skill !== 'Fitness' && skill !== 'Strength') {
+                  if (val === 1) xpBoost = "(100%)";
+                  else if (val === 2) xpBoost = "(133%)";
+                  else if (val >= 3) xpBoost = "(166%)";
+                  else xpBoost = "(25%)";
+                }
+
+                return (
+                  <div key={skill} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white">{skill}</span>
+                      <span className="text-green-500">Lvl {val} {xpBoost}</span>
+                    </div>
+                    <div className="h-1 bg-[#252830] rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500" style={{ width: `${(val / 10) * 100}%` }}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-red-950/20 p-4 border border-red-900/30 flex-grow overflow-hidden flex flex-col">
+            <h2 className="text-[10px] uppercase tracking-widest text-red-400 mb-2">Build Summary</h2>
+            <div className="text-[11px] leading-relaxed text-[#808796] overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-red-900/30">
+               <p><span className="text-white uppercase tracking-wider text-[10px]">Occupation:</span> {selectedOccupation.name}</p>
+               {currentTraits.sort((a,b) => a.type.localeCompare(b.type)).map(t => (
+                  <p key={t.id}>
+                    <span className={cn(
+                      "font-semibold", 
+                      t.type === 'positive' || t.type === 'occupation' ? "text-white" : "text-red-400"
+                    )}>{t.name}:</span> {t.description}
+                  </p>
+               ))}
+            </div>
+          </div>
+        </section>
+      </main>
+      
+      {/* Footer Info Bar */}
+      <footer className="h-10 bg-[#0c0d10] border-t border-[#1f2228] flex items-center justify-between px-6 shrink-0 mt-auto fixed bottom-0 w-full z-50">
+        <div className="flex items-center gap-4 text-[10px] text-[#424855] uppercase">
+          <span>Version 42.16.1</span>
+          <span>|</span>
+          <span>Knox Event Protocol v3.0</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function TraitButton({ trait, isSelected, isExcluded, onClick }: { trait: Trait, isSelected: boolean, isExcluded: boolean, onClick: () => void }) {
+  return (
+    <div
+      onClick={!isExcluded ? onClick : undefined}
+      className={cn(
+        "p-2 border flex justify-between items-center transition-colors cursor-pointer",
+        isSelected 
+          ? (trait.type === 'positive' ? "bg-green-900/10 border-green-900/40" : "bg-red-900/10 border-red-900/40")
+          : isExcluded 
+            ? "bg-[#14161b] border-[#1f2228] opacity-20 cursor-not-allowed" 
+            : "bg-[#14161b] border-[#1f2228] opacity-40 hover:bg-[#1f2228] hover:opacity-100"
+      )}
+    >
+      <div className="flex flex-col">
+        <span className={cn(
+          "text-xs transition-colors", 
+          isSelected ? "text-white" : "text-[#a0a5b0]", 
+          isExcluded && "line-through"
+        )}>
+          {trait.name}
+        </span>
+      </div>
+      <span className={cn("font-mono text-[10px]", 
+        trait.cost < 0 ? "text-green-500" : "text-red-500"
+      )}>
+        {trait.cost > 0 ? `+${trait.cost}` : trait.cost}
+      </span>
+    </div>
+  );
+}
